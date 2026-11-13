@@ -474,7 +474,7 @@ function App() {
   };
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${taskEditorOpen ? 'app-shell--editor-open' : ''}`}>
       <aside className="sidebar">
         <div className="brand-block">
           <div className="brand-mark">P</div>

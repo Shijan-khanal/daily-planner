@@ -462,6 +462,10 @@ h1, h2, h3, h4, p {
   z-index: 2;
 }
 
+.app-shell--editor-open .task-card__edit-action {
+  visibility: hidden;
+}
+
 .task-card__edit-button {
   width: 30px;
   height: 30px;
@@ -771,6 +775,7 @@ kbd {
 .modal-backdrop {
   position: fixed;
   inset: 0;
+  z-index: 1000;
   background: rgba(8, 12, 30, 0.5);
   display: grid;
   place-items: center;
