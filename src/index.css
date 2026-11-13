@@ -272,6 +272,14 @@ h1, h2, h3, h4, p {
   gap: 0.6rem;
 }
 
+.date-controls__selected {
+  min-width: 6rem;
+  color: var(--text-soft);
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
 .date-controls--inline {
   margin-bottom: 1rem;
 }
@@ -325,6 +333,7 @@ h1, h2, h3, h4, p {
 }
 
 .task-card {
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -396,6 +405,7 @@ h1, h2, h3, h4, p {
   flex-direction: column;
   gap: 0.5rem;
   min-width: 0;
+  padding-right: 1.7rem;
 }
 
 .task-card__title-row {
@@ -445,9 +455,55 @@ h1, h2, h3, h4, p {
   flex-wrap: wrap;
 }
 
-.task-card__actions {
-  display: flex;
-  gap: 0.5rem;
+.task-menu {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  z-index: 2;
+}
+
+.task-menu__trigger {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-soft);
+}
+
+.task-menu__trigger:hover,
+.task-menu__trigger[aria-expanded='true'] {
+  border-color: var(--border);
+  background: var(--panel-strong);
+  color: var(--text);
+}
+
+.task-menu__popover {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  right: 0;
+  min-width: 140px;
+  padding: 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.task-menu__popover button {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.task-menu__popover button:hover {
+  background: var(--panel-strong);
 }
 
 .dashboard-grid, .stats-grid, .settings-grid, .list-grid {
@@ -511,7 +567,7 @@ h1, h2, h3, h4, p {
 
 .week-grid {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.8rem;
 }
 
@@ -535,15 +591,28 @@ h1, h2, h3, h4, p {
 }
 
 .week-column__header {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto;
   align-items: center;
   margin-bottom: 0.75rem;
   color: var(--text-soft);
 }
 
+.week-column__date {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
 .week-column__header strong {
   color: var(--text);
+}
+
+.week-column__relative {
+  grid-column: 1 / -1;
+  margin-top: 0.1rem;
+  color: var(--text-faint);
+  font-size: 0.72rem;
 }
 
 .week-column__tasks {
@@ -563,15 +632,6 @@ h1, h2, h3, h4, p {
 
 .week-column .task-card__main {
   min-width: 0;
-}
-
-.week-column .task-card__actions {
-  justify-content: flex-end;
-  flex-wrap: wrap;
-}
-
-.week-column .task-card__actions .ghost-button {
-  padding: 0.45rem 0.65rem;
 }
 
 .empty-day {
@@ -759,6 +819,12 @@ kbd {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
+}
+
+.modal__footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .form-grid {

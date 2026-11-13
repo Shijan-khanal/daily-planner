@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   addDays,
-  addWeeks,
+  addMonths,
   eachDayOfInterval,
   endOfMonth,
   endOfWeek,
   format,
   isToday,
+  isTomorrow,
+  isYesterday,
   startOfMonth,
   startOfWeek,
 } from 'date-fns';
@@ -20,6 +22,7 @@ import {
   Download,
   Inbox,
   ListTodo,
+  MoreHorizontal,
   Moon,
   Plus,
   Search,
@@ -78,6 +81,7 @@ function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropTargetDate, setDropTargetDate] = useState<string | null>(null);
+  const [openTaskMenuId, setOpenTaskMenuId] = useState<string | null>(null);
 
   useEffect(() => {
     void loadAppData().then((loadedData) => {
@@ -92,6 +96,21 @@ function App() {
     }
     void saveAppData(appData);
   }, [appData, loaded]);
+
+  useEffect(() => {
+    if (!openTaskMenuId) {
+      return;
+    }
+
+    const closeMenuOnOutsideClick = (event: PointerEvent) => {
+      if (!(event.target instanceof Element) || !event.target.closest('.task-menu')) {
+        setOpenTaskMenuId(null);
+      }
+    };
+
+    document.addEventListener('pointerdown', closeMenuOnOutsideClick);
+    return () => document.removeEventListener('pointerdown', closeMenuOnOutsideClick);
+  }, [openTaskMenuId]);
 
   useEffect(() => {
     const theme = appData.settings.theme === 'system'
@@ -264,6 +283,15 @@ function App() {
       ...current,
       tasks: current.tasks.filter((task) => task.id !== taskId),
     }));
+    setOpenTaskMenuId(null);
+  };
+
+  const deleteEditingTask = () => {
+    if (!editingTaskId || !window.confirm('Delete this task? This cannot be undone.')) {
+      return;
+    }
+    deleteTask(editingTaskId);
+    closeTaskEditor();
   };
 
   const updateSetting = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
@@ -305,9 +333,11 @@ function App() {
   };
 
   const weekDays = useMemo(() => {
-    const weekStart = startOfWeek(selectedDate, { weekStartsOn: appData.settings.firstDayOfWeek === 'monday' ? 1 : 0 });
-    return eachDayOfInterval({ start: weekStart, end: endOfWeek(weekStart, { weekStartsOn: appData.settings.firstDayOfWeek === 'monday' ? 1 : 0 }) });
-  }, [selectedDate, appData.settings.firstDayOfWeek]);
+    return eachDayOfInterval({
+      start: addDays(selectedDate, -1),
+      end: addDays(selectedDate, 2),
+    });
+  }, [selectedDate]);
 
   const monthGrid = useMemo(() => {
     const monthStart = startOfMonth(selectedDate);
@@ -346,7 +376,6 @@ function App() {
             {task.description ? <p className="task-description">{task.description}</p> : null}
             <div className="task-meta">
               {task.dueDate ? <span className="meta-badge">Due {task.dueDate}</span> : null}
-              {task.scheduledDate ? <span className="meta-badge">Scheduled {task.scheduledDate}</span> : null}
               {task.startTime ? <span className="meta-badge">{task.startTime}</span> : null}
             </div>
             {task.labels.length ? (
@@ -358,9 +387,31 @@ function App() {
             ) : null}
           </div>
         </div>
-        <div className="task-card__actions">
-          <button type="button" onClick={() => openTaskEditor(task)} className="ghost-button">Edit</button>
-          <button type="button" onClick={() => deleteTask(task.id)} className="ghost-button ghost-button--danger">Delete</button>
+        <div className="task-menu">
+          <button
+            type="button"
+            className="task-menu__trigger"
+            aria-label={`More options for ${task.title}`}
+            aria-haspopup="menu"
+            aria-expanded={openTaskMenuId === task.id}
+            onClick={() => setOpenTaskMenuId((current) => current === task.id ? null : task.id)}
+          >
+            <MoreHorizontal size={17} />
+          </button>
+          {openTaskMenuId === task.id ? (
+            <div className="task-menu__popover" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpenTaskMenuId(null);
+                  openTaskEditor(task);
+                }}
+              >
+                Edit task
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
     );
@@ -392,7 +443,7 @@ function App() {
               >
                 <span className="month-cell__day">{format(date, 'd')}</span>
                 <div className="month-cell__items">
-                  {dayTasks.slice(0, 2).map((task) => (
+                  {dayTasks.map((task) => (
                     <span
                       key={task.id}
                       className="mini-tag mini-tag--draggable"
@@ -431,8 +482,16 @@ function App() {
               onDrop={(event) => handleTaskDrop(event, dateKey)}
             >
               <div className="week-column__header">
-                <span>{format(day, 'EEE')}</span>
-                <strong>{format(day, 'd')}</strong>
+                <div className="week-column__date">
+                  <span>{format(day, 'EEE')}</span>
+                  <strong>{format(day, 'd')}</strong>
+                </div>
+                <small className="week-column__relative">
+                  {isYesterday(day) ? 'Yesterday' :
+                    isToday(day) ? 'Today' :
+                      isTomorrow(day) ? 'Tomorrow' :
+                        format(day, 'yyyy-MM-dd') === format(addDays(new Date(), 2), 'yyyy-MM-dd') ? 'In 2 days' : format(day, 'EEEE')}
+                </small>
               </div>
               {dayTasks.length ? (
                 <div className="week-column__tasks">
@@ -542,11 +601,12 @@ function App() {
           </div>
           {selectedView === 'calendar' ? (
             <div className="date-controls">
-              <button type="button" className="nav-button" onClick={() => setSelectedDate((value) => addWeeks(value, -1))}><ChevronLeft size={16} /></button>
-              <button type="button" className="ghost-button" onClick={() => setSelectedDate(new Date())}>This week</button>
-              <button type="button" className="nav-button" onClick={() => setSelectedDate((value) => addWeeks(value, 1))}><ChevronRight size={16} /></button>
+              <button type="button" className="nav-button" aria-label="Previous day" onClick={() => setSelectedDate((value) => calendarView === 'month' ? addMonths(value, -1) : addDays(value, -1))}><ChevronLeft size={16} /></button>
+              <button type="button" className="ghost-button" onClick={() => setSelectedDate(new Date())}>Today</button>
+              <span className="date-controls__selected">{format(selectedDate, 'EEE, MMM d')}</span>
+              <button type="button" className="nav-button" aria-label="Next day" onClick={() => setSelectedDate((value) => calendarView === 'month' ? addMonths(value, 1) : addDays(value, 1))}><ChevronRight size={16} /></button>
               <div className="segmented-control">
-                <button type="button" className={calendarView === 'week' ? 'active' : ''} onClick={() => setCalendarView('week')}>Week</button>
+                <button type="button" className={calendarView === 'week' ? 'active' : ''} onClick={() => setCalendarView('week')}>Days</button>
                 <button type="button" className={calendarView === 'month' ? 'active' : ''} onClick={() => setCalendarView('month')}>Month</button>
               </div>
             </div>
@@ -752,8 +812,13 @@ function App() {
             </div>
 
             <div className="modal__footer">
-              <button type="button" className="ghost-button" onClick={closeTaskEditor}>Cancel</button>
-              <button type="button" className="primary-button" onClick={saveTask}>Save task</button>
+              {editingTaskId ? (
+                <button type="button" className="ghost-button ghost-button--danger" onClick={deleteEditingTask}>Delete task</button>
+              ) : <span />}
+              <div className="modal__footer-actions">
+                <button type="button" className="ghost-button" onClick={closeTaskEditor}>Cancel</button>
+                <button type="button" className="primary-button" onClick={saveTask}>Save task</button>
+              </div>
             </div>
           </div>
         </div>

@@ -2,7 +2,7 @@
 
 A personal task planner built with React, TypeScript, and Vite. Tasks and settings are stored locally in the browser using IndexedDB.
 
-The calendar is the home view. Tasks use a title, priority, subject label, and status; drag them between days in the week or month view to reschedule.
+The calendar is the home view. Its Days view shows yesterday, today, tomorrow, and the following day; use the arrows to move the window one day at a time. Tasks use a title, priority, subject label, and status; drag them between days in the Days or Month view to reschedule. Use the three-dot task menu to edit a task or open its editor to delete it.
 
 When GitHub Pages is enabled, the site is available at <https://shijan-khanal.github.io/daily-planner/>.
 
