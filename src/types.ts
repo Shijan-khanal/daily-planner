@@ -29,16 +29,6 @@ export type ListItem = {
   description: string;
 };
 
-export type CalendarEvent = {
-  id: string;
-  title: string;
-  date: string;
-  start: string;
-  end: string;
-  color: string;
-  allDay: boolean;
-};
-
 export type AppSettings = {
   theme: ThemeMode;
   defaultCalendarView: 'week' | 'month';
@@ -50,7 +40,6 @@ export type AppSettings = {
 export type AppData = {
   tasks: Task[];
   lists: ListItem[];
-  calendarEvents: CalendarEvent[];
   settings: AppSettings;
 };
 

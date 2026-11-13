@@ -528,21 +528,6 @@ h1, h2, h3, h4, p {
   color: var(--text);
 }
 
-.calendar-event {
-  margin-bottom: 0.5rem;
-  border-left: 3px solid var(--primary);
-  background: rgba(92,108,255,0.08);
-  border-radius: 12px;
-  padding: 0.5rem 0.65rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.calendar-event small {
-  color: var(--text-soft);
-}
-
 .week-column__tasks {
   display: flex;
   flex-direction: column;
@@ -607,10 +592,6 @@ h1, h2, h3, h4, p {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.mini-tag--event {
-  background: rgba(133, 146, 229, 0.18);
 }
 
 .shortcut-panel {

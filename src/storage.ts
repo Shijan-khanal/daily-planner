@@ -73,26 +73,6 @@ export const defaultAppData = (): AppData => ({
     { id: 'list-fitness', name: 'Fitness', color: '#22c55e', icon: 'dumbbell', description: 'Exercise and health goals' },
     { id: 'list-personal', name: 'Personal', color: '#f59e0b', icon: 'home', description: 'Life admin and personal tasks' },
   ],
-  calendarEvents: [
-    {
-      id: 'event-1',
-      title: 'Team sync',
-      date: defaultDate(0),
-      start: '10:00',
-      end: '10:45',
-      color: '#8b5cf6',
-      allDay: false,
-    },
-    {
-      id: 'event-2',
-      title: 'Deep work block',
-      date: defaultDate(2),
-      start: '09:00',
-      end: '11:00',
-      color: '#10b981',
-      allDay: false,
-    },
-  ],
   settings: {
     theme: 'dark',
     defaultCalendarView: 'week',
@@ -127,8 +107,13 @@ export async function loadAppData(): Promise<AppData> {
     return await new Promise<AppData>((resolve) => {
       const request = store.get(KEY);
       request.onsuccess = () => {
-        const result = request.result as AppData | undefined;
-        resolve(result ?? defaultAppData());
+        const result = request.result as Partial<AppData> | undefined;
+        const defaults = defaultAppData();
+        resolve(result ? {
+          tasks: result.tasks ?? defaults.tasks,
+          lists: result.lists ?? defaults.lists,
+          settings: { ...defaults.settings, ...result.settings },
+        } : defaults);
       };
       request.onerror = () => resolve(defaultAppData());
     });

@@ -317,7 +317,6 @@ function App() {
     const nextData: AppData = {
       tasks: parsed.tasks ?? [],
       lists: parsed.lists ?? defaultAppData().lists,
-      calendarEvents: parsed.calendarEvents ?? [],
       settings: {
         ...defaultAppData().settings,
         ...(parsed.settings ?? {}),
@@ -395,16 +394,12 @@ function App() {
           {monthGrid.map((date) => {
             const dateKey = format(date, 'yyyy-MM-dd');
             const dayTasks = appData.tasks.filter((task) => task.scheduledDate === dateKey && task.status !== 'archived');
-            const dayEvents = appData.calendarEvents.filter((event) => event.date === dateKey);
             return (
               <button type="button" key={dateKey} className={`month-cell ${isToday(date) ? 'month-cell--today' : ''}`} onClick={() => setSelectedDate(date)}>
                 <span className="month-cell__day">{format(date, 'd')}</span>
                 <div className="month-cell__items">
                   {dayTasks.slice(0, 2).map((task) => (
                     <span key={task.id} className="mini-tag" style={{ background: `${task.color || priorityColors[task.priority]}22`, color: task.color || priorityColors[task.priority] }}>{task.title}</span>
-                  ))}
-                  {dayEvents.slice(0, 1).map((event) => (
-                    <span key={event.id} className="mini-tag mini-tag--event" style={{ background: `${event.color}22`, color: event.color }}>{event.title}</span>
                   ))}
                 </div>
               </button>
@@ -419,7 +414,6 @@ function App() {
         {weekDays.map((day) => {
           const dateKey = format(day, 'yyyy-MM-dd');
           const dayTasks = visibleTasks.filter((task) => task.scheduledDate === dateKey && task.status !== 'archived');
-          const dayEvents = appData.calendarEvents.filter((event) => event.date === dateKey);
 
           return (
             <div key={dateKey} className={`week-column ${isToday(day) ? 'week-column--today' : ''}`}>
@@ -427,12 +421,6 @@ function App() {
                 <span>{format(day, 'EEE')}</span>
                 <strong>{format(day, 'd')}</strong>
               </div>
-              {dayEvents.map((event) => (
-                <div key={event.id} className="calendar-event" style={{ backgroundColor: `${event.color}20`, borderLeftColor: event.color }}>
-                  <span>{event.title}</span>
-                  <small>{event.start} - {event.end}</small>
-                </div>
-              ))}
               {dayTasks.length ? (
                 <div className="week-column__tasks">
                   {dayTasks.map((task) => renderTaskCard(task))}
