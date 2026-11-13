@@ -2,6 +2,8 @@
 
 A personal task planner built with React, TypeScript, and Vite. Tasks and settings are stored locally in the browser using IndexedDB.
 
+When GitHub Pages is enabled, the site is available at <https://shijan-khanal.github.io/daily-planner/>.
+
 ## Run locally
 
 ```sh
