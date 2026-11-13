@@ -1,8 +1,14 @@
-import type { AppData } from './types';
+import type { AppData, Task } from './types';
 
 const DB_NAME = 'planner-db';
 const STORE_NAME = 'planner-store';
 const KEY = 'planner-state';
+
+export function normalizeTask(task: Task): Task {
+  const { listId: legacyListId, ...normalizedTask } = task as Task & { listId?: string };
+  void legacyListId;
+  return normalizedTask;
+}
 
 const defaultDate = (offset: number) => {
   const date = new Date();
@@ -23,7 +29,6 @@ export const defaultAppData = (): AppData => ({
       endTime: '10:00',
       priority: 'high',
       status: 'in-progress',
-      listId: 'list-work',
       labels: ['planning'],
       checklist: [
         { id: 'c1', text: 'Review unfinished projects', checked: true },
@@ -43,7 +48,6 @@ export const defaultAppData = (): AppData => ({
       endTime: '19:30',
       priority: 'urgent',
       status: 'not-started',
-      listId: 'list-university',
       labels: ['homework'],
       checklist: [],
       createdAt: new Date().toISOString(),
@@ -60,18 +64,11 @@ export const defaultAppData = (): AppData => ({
       endTime: '19:00',
       priority: 'medium',
       status: 'completed',
-      listId: 'list-fitness',
       labels: ['health'],
       checklist: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
-  ],
-  lists: [
-    { id: 'list-work', name: 'Work', color: '#7c3aed', icon: 'briefcase', description: 'Professional and project work' },
-    { id: 'list-university', name: 'University', color: '#0ea5e9', icon: 'book-open', description: 'Studies and assignments' },
-    { id: 'list-fitness', name: 'Fitness', color: '#22c55e', icon: 'dumbbell', description: 'Exercise and health goals' },
-    { id: 'list-personal', name: 'Personal', color: '#f59e0b', icon: 'home', description: 'Life admin and personal tasks' },
   ],
   settings: {
     theme: 'dark',
@@ -110,8 +107,7 @@ export async function loadAppData(): Promise<AppData> {
         const result = request.result as Partial<AppData> | undefined;
         const defaults = defaultAppData();
         resolve(result ? {
-          tasks: result.tasks ?? defaults.tasks,
-          lists: result.lists ?? defaults.lists,
+          tasks: result.tasks?.map(normalizeTask) ?? defaults.tasks,
           settings: { ...defaults.settings, ...result.settings },
         } : defaults);
       };

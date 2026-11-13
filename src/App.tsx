@@ -30,22 +30,13 @@ import {
   X,
 } from 'lucide-react';
 import type { AppData, AppSettings, NavKey, Priority, Task, TaskStatus, ThemeMode } from './types';
-import { defaultAppData, loadAppData, saveAppData } from './storage';
+import { defaultAppData, loadAppData, normalizeTask, saveAppData } from './storage';
 
 type DraftTask = {
   title: string;
-  description: string;
-  notes: string;
-  dueDate: string;
-  scheduledDate: string;
-  startTime: string;
-  endTime: string;
   priority: Priority;
-  color: string;
   status: TaskStatus;
-  listId: string;
-  labels: string;
-  checklist: { id: string; text: string; checked: boolean }[];
+  label: string;
 };
 
 const navItems: { key: NavKey; label: string; icon: typeof Inbox }[] = [
@@ -54,7 +45,6 @@ const navItems: { key: NavKey; label: string; icon: typeof Inbox }[] = [
   { key: 'upcoming', label: 'Upcoming', icon: ListTodo },
   { key: 'calendar', label: 'Calendar', icon: CalendarDays },
   { key: 'tasks', label: 'Tasks', icon: CheckCheck },
-  { key: 'lists', label: 'Lists', icon: ListTodo },
   { key: 'productivity', label: 'Productivity', icon: Sparkles },
   { key: 'settings', label: 'Settings', icon: Settings },
 ];
@@ -66,34 +56,28 @@ const priorityColors: Record<Priority, string> = {
   urgent: '#ef4444',
 };
 
-const defaultDraft = (listId = 'list-work', selectedDate = new Date()): DraftTask => ({
+const defaultDraft = (): DraftTask => ({
   title: '',
-  description: '',
-  notes: '',
-  dueDate: format(selectedDate, 'yyyy-MM-dd'),
-  scheduledDate: format(selectedDate, 'yyyy-MM-dd'),
-  startTime: '',
-  endTime: '',
   priority: 'medium',
-  color: '',
   status: 'not-started',
-  listId,
-  labels: '',
-  checklist: [],
+  label: '',
 });
 
 function App() {
   const [appData, setAppData] = useState<AppData>(defaultAppData());
-  const [selectedView, setSelectedView] = useState<NavKey>('inbox');
+  const [selectedView, setSelectedView] = useState<NavKey>('calendar');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [search, setSearch] = useState('');
   const [quickTitle, setQuickTitle] = useState('');
   const [taskEditorOpen, setTaskEditorOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftTask>(defaultDraft());
+  const [draftScheduledDate, setDraftScheduledDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [loaded, setLoaded] = useState(false);
   const [calendarView, setCalendarView] = useState<'week' | 'month'>('week');
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dropTargetDate, setDropTargetDate] = useState<string | null>(null);
 
   useEffect(() => {
     void loadAppData().then((loadedData) => {
@@ -133,11 +117,6 @@ function App() {
     return () => window.removeEventListener('keydown', onKeydown);
   }, []);
 
-  const listMap = useMemo(
-    () => new Map(appData.lists.map((list) => [list.id, list])),
-    [appData.lists],
-  );
-
   const tasksByStatus = useMemo(() => {
     const safe = appData.tasks.filter((task) => task.status !== 'archived');
     return {
@@ -161,27 +140,19 @@ function App() {
 
   const todayKey = format(new Date(), 'yyyy-MM-dd');
 
-  const openTaskEditor = (task?: Task) => {
+  const openTaskEditor = (task?: Task, scheduledDate = selectedDate) => {
+    setDraftScheduledDate(task?.scheduledDate ?? format(scheduledDate, 'yyyy-MM-dd'));
     if (task) {
       setEditingTaskId(task.id);
       setDraft({
         title: task.title,
-        description: task.description,
-        notes: task.notes,
-        dueDate: task.dueDate ?? '',
-        scheduledDate: task.scheduledDate ?? '',
-        startTime: task.startTime ?? '',
-        endTime: task.endTime ?? '',
         priority: task.priority,
-        color: task.color ?? '',
         status: task.status,
-        listId: task.listId,
-        labels: task.labels.join(', '),
-        checklist: task.checklist,
+        label: task.labels.join(', '),
       });
     } else {
       setEditingTaskId(null);
-      setDraft(defaultDraft(appData.lists[0]?.id, selectedDate));
+      setDraft(defaultDraft());
     }
     setTaskEditorOpen(true);
   };
@@ -189,7 +160,7 @@ function App() {
   const closeTaskEditor = () => {
     setTaskEditorOpen(false);
     setEditingTaskId(null);
-    setDraft(defaultDraft(appData.lists[0]?.id, selectedDate));
+    setDraft(defaultDraft());
   };
 
   const saveTask = () => {
@@ -199,27 +170,25 @@ function App() {
     }
 
     const iso = new Date().toISOString();
-    const labels = draft.labels
-      .split(',')
-      .map((label) => label.trim())
-      .filter(Boolean);
-
+    const existingTask = editingTaskId
+      ? appData.tasks.find((task) => task.id === editingTaskId)
+      : undefined;
     const taskPayload: Task = {
-      id: editingTaskId ?? `task-${Date.now()}`,
+      ...existingTask,
+      id: existingTask?.id ?? `task-${Date.now()}`,
       title: trimmedTitle,
-      description: draft.description.trim(),
-      notes: draft.notes.trim(),
-      dueDate: draft.dueDate || null,
-      scheduledDate: draft.scheduledDate || null,
-      startTime: draft.startTime || null,
-      endTime: draft.endTime || null,
       priority: draft.priority,
-      color: draft.color || undefined,
       status: draft.status,
-      listId: draft.listId,
-      labels,
-      checklist: draft.checklist.filter((item) => item.text.trim()),
-      createdAt: editingTaskId ? appData.tasks.find((task) => task.id === editingTaskId)?.createdAt ?? iso : iso,
+      labels: draft.label.trim() ? [draft.label.trim()] : [],
+      scheduledDate: existingTask?.scheduledDate ?? draftScheduledDate,
+      description: existingTask?.description ?? '',
+      notes: existingTask?.notes ?? '',
+      dueDate: existingTask?.dueDate ?? null,
+      startTime: existingTask?.startTime ?? null,
+      endTime: existingTask?.endTime ?? null,
+      color: existingTask?.color,
+      checklist: existingTask?.checklist ?? [],
+      createdAt: existingTask?.createdAt ?? iso,
       updatedAt: iso,
     };
 
@@ -245,27 +214,11 @@ function App() {
       return;
     }
 
-    const iso = new Date().toISOString();
-    const task: Task = {
-      id: `task-${Date.now()}`,
-      title,
-      description: '',
-      notes: '',
-      dueDate: null,
-      scheduledDate: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : null,
-      startTime: null,
-      endTime: null,
-      priority: 'medium',
-      status: 'not-started',
-      listId: appData.lists[0]?.id ?? 'list-work',
-      labels: [],
-      checklist: [],
-      createdAt: iso,
-      updatedAt: iso,
-    };
-
-    setAppData((current) => ({ ...current, tasks: [task, ...current.tasks] }));
+    setEditingTaskId(null);
+    setDraft({ ...defaultDraft(), title });
+    setDraftScheduledDate(format(selectedDate, 'yyyy-MM-dd'));
     setQuickTitle('');
+    setTaskEditorOpen(true);
   };
 
   const toggleTaskComplete = (taskId: string) => {
@@ -279,6 +232,31 @@ function App() {
         return { ...task, status: nextStatus, updatedAt: new Date().toISOString() };
       }),
     }));
+  };
+
+  const moveTaskToDate = (taskId: string, scheduledDate: string) => {
+    setAppData((current) => ({
+      ...current,
+      tasks: current.tasks.map((task) => task.id === taskId
+        ? { ...task, scheduledDate, updatedAt: new Date().toISOString() }
+        : task),
+    }));
+  };
+
+  const handleTaskDragStart = (event: React.DragEvent<HTMLElement>, taskId: string) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', taskId);
+    setDraggedTaskId(taskId);
+  };
+
+  const handleTaskDrop = (event: React.DragEvent<HTMLElement>, date: string) => {
+    event.preventDefault();
+    const taskId = event.dataTransfer.getData('text/plain') || draggedTaskId;
+    if (taskId) {
+      moveTaskToDate(taskId, date);
+    }
+    setDraggedTaskId(null);
+    setDropTargetDate(null);
   };
 
   const deleteTask = (taskId: string) => {
@@ -315,8 +293,7 @@ function App() {
     const text = await file.text();
     const parsed = JSON.parse(text) as Partial<AppData>;
     const nextData: AppData = {
-      tasks: parsed.tasks ?? [],
-      lists: parsed.lists ?? defaultAppData().lists,
+      tasks: parsed.tasks?.map(normalizeTask) ?? [],
       settings: {
         ...defaultAppData().settings,
         ...(parsed.settings ?? {}),
@@ -342,13 +319,19 @@ function App() {
     });
   }, [selectedDate, appData.settings.firstDayOfWeek]);
 
-  const renderTaskCard = (task: Task) => {
-    const list = listMap.get(task.listId);
+  const renderTaskCard = (task: Task, draggable = false) => {
     const isDone = task.status === 'completed';
     const taskColor = task.color || priorityColors[task.priority];
 
     return (
-      <div key={task.id} className={`task-card ${isDone ? 'task-card--done' : ''}`} style={{ borderLeftColor: taskColor }}>
+      <div
+        key={task.id}
+        className={`task-card ${isDone ? 'task-card--done' : ''} ${draggedTaskId === task.id ? 'task-card--dragging' : ''} ${draggable ? 'task-card--draggable' : ''}`}
+        style={{ borderLeftColor: taskColor }}
+        draggable={draggable}
+        onDragStart={draggable ? (event) => handleTaskDragStart(event, task.id) : undefined}
+        onDragEnd={draggable ? () => { setDraggedTaskId(null); setDropTargetDate(null); } : undefined}
+      >
         <div className="task-card__main">
           <button type="button" className="task-check" aria-label="Toggle task complete" onClick={() => toggleTaskComplete(task.id)}>
             {isDone ? <Check size={12} /> : null}
@@ -362,7 +345,6 @@ function App() {
             </div>
             {task.description ? <p className="task-description">{task.description}</p> : null}
             <div className="task-meta">
-              {list ? <span className="meta-badge">{list.name}</span> : null}
               {task.dueDate ? <span className="meta-badge">Due {task.dueDate}</span> : null}
               {task.scheduledDate ? <span className="meta-badge">Scheduled {task.scheduledDate}</span> : null}
               {task.startTime ? <span className="meta-badge">{task.startTime}</span> : null}
@@ -395,11 +377,32 @@ function App() {
             const dateKey = format(date, 'yyyy-MM-dd');
             const dayTasks = appData.tasks.filter((task) => task.scheduledDate === dateKey && task.status !== 'archived');
             return (
-              <button type="button" key={dateKey} className={`month-cell ${isToday(date) ? 'month-cell--today' : ''}`} onClick={() => setSelectedDate(date)}>
+              <button
+                type="button"
+                key={dateKey}
+                className={`month-cell ${isToday(date) ? 'month-cell--today' : ''} ${dropTargetDate === dateKey ? 'month-cell--drop-target' : ''}`}
+                onClick={() => setSelectedDate(date)}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'move';
+                  setDropTargetDate(dateKey);
+                }}
+                onDragLeave={() => setDropTargetDate((current) => current === dateKey ? null : current)}
+                onDrop={(event) => handleTaskDrop(event, dateKey)}
+              >
                 <span className="month-cell__day">{format(date, 'd')}</span>
                 <div className="month-cell__items">
                   {dayTasks.slice(0, 2).map((task) => (
-                    <span key={task.id} className="mini-tag" style={{ background: `${task.color || priorityColors[task.priority]}22`, color: task.color || priorityColors[task.priority] }}>{task.title}</span>
+                    <span
+                      key={task.id}
+                      className="mini-tag mini-tag--draggable"
+                      style={{ background: `${task.color || priorityColors[task.priority]}22`, color: task.color || priorityColors[task.priority] }}
+                      draggable
+                      onDragStart={(event) => handleTaskDragStart(event, task.id)}
+                      onDragEnd={() => { setDraggedTaskId(null); setDropTargetDate(null); }}
+                    >
+                      {task.title}
+                    </span>
                   ))}
                 </div>
               </button>
@@ -416,18 +419,27 @@ function App() {
           const dayTasks = visibleTasks.filter((task) => task.scheduledDate === dateKey && task.status !== 'archived');
 
           return (
-            <div key={dateKey} className={`week-column ${isToday(day) ? 'week-column--today' : ''}`}>
+            <div
+              key={dateKey}
+              className={`week-column ${isToday(day) ? 'week-column--today' : ''} ${dropTargetDate === dateKey ? 'week-column--drop-target' : ''}`}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect = 'move';
+                setDropTargetDate(dateKey);
+              }}
+              onDragLeave={() => setDropTargetDate((current) => current === dateKey ? null : current)}
+              onDrop={(event) => handleTaskDrop(event, dateKey)}
+            >
               <div className="week-column__header">
                 <span>{format(day, 'EEE')}</span>
                 <strong>{format(day, 'd')}</strong>
               </div>
               {dayTasks.length ? (
                 <div className="week-column__tasks">
-                  {dayTasks.map((task) => renderTaskCard(task))}
+                  {dayTasks.map((task) => renderTaskCard(task, true))}
                 </div>
-              ) : (
-                <button type="button" className="empty-day" onClick={() => openTaskEditor()}>+ Add task</button>
-              )}
+              ) : null}
+              <button type="button" className="empty-day" onClick={() => openTaskEditor(undefined, day)}>+ Add task</button>
             </div>
           );
         })}
@@ -515,7 +527,6 @@ function App() {
               {selectedView === 'upcoming' && 'Upcoming'}
               {selectedView === 'calendar' && 'Calendar'}
               {selectedView === 'tasks' && 'Tasks'}
-              {selectedView === 'lists' && 'Lists'}
               {selectedView === 'productivity' && 'Productivity'}
               {selectedView === 'settings' && 'Settings'}
             </h2>
@@ -523,9 +534,8 @@ function App() {
               {selectedView === 'inbox' && 'Capture everything that needs attention without slowing down.'}
               {selectedView === 'today' && `Focus on ${format(new Date(), 'EEEE, MMM d')}.`}
               {selectedView === 'upcoming' && 'Plan ahead and keep the week in motion.'}
-              {selectedView === 'calendar' && 'See your schedule, tasks, and time blocks together.'}
+              {selectedView === 'calendar' && 'Drag tasks between days to plan your week.'}
               {selectedView === 'tasks' && 'Everything in one complete list.'}
-              {selectedView === 'lists' && 'Organize life by projects, categories, and routines.'}
               {selectedView === 'productivity' && 'Track momentum, progress, and completion.'}
               {selectedView === 'settings' && 'Adjust the planner to match your rhythm.'}
             </p>
@@ -617,22 +627,6 @@ function App() {
             <div className="task-list">
               {visibleTasks.map((task) => renderTaskCard(task))}
             </div>
-          </div>
-        ) : null}
-
-        {selectedView === 'lists' ? (
-          <div className="list-grid">
-            {appData.lists.map((list) => (
-              <div key={list.id} className="panel panel--padded">
-                <div className="list-header" style={{ borderColor: list.color }}>
-                  <span className="color-dot" style={{ backgroundColor: list.color }} />
-                  <h3>{list.name}</h3>
-                </div>
-                <div className="task-list compact-list">
-                  {appData.tasks.filter((task) => task.listId === list.id).slice(0, 5).map((task) => renderTaskCard(task))}
-                </div>
-              </div>
-            ))}
           </div>
         ) : null}
 
@@ -729,41 +723,9 @@ function App() {
               <button type="button" className="icon-button" onClick={closeTaskEditor}><X size={16} /></button>
             </div>
             <div className="form-grid">
-              <label>
+              <label className="full-width">
                 <span>Title</span>
                 <input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} />
-              </label>
-              <label>
-                <span>List</span>
-                <select value={draft.listId} onChange={(event) => setDraft((current) => ({ ...current, listId: event.target.value }))}>
-                  {appData.lists.map((list) => (
-                    <option key={list.id} value={list.id}>{list.name}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="full-width">
-                <span>Description</span>
-                <textarea value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} />
-              </label>
-              <label className="full-width">
-                <span>Notes</span>
-                <textarea value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} />
-              </label>
-              <label>
-                <span>Due date</span>
-                <input type="date" value={draft.dueDate} onChange={(event) => setDraft((current) => ({ ...current, dueDate: event.target.value }))} />
-              </label>
-              <label>
-                <span>Scheduled</span>
-                <input type="date" value={draft.scheduledDate} onChange={(event) => setDraft((current) => ({ ...current, scheduledDate: event.target.value }))} />
-              </label>
-              <label>
-                <span>Start time</span>
-                <input type="time" value={draft.startTime} onChange={(event) => setDraft((current) => ({ ...current, startTime: event.target.value }))} />
-              </label>
-              <label>
-                <span>End time</span>
-                <input type="time" value={draft.endTime} onChange={(event) => setDraft((current) => ({ ...current, endTime: event.target.value }))} />
               </label>
               <label>
                 <span>Priority</span>
@@ -775,21 +737,8 @@ function App() {
                 </select>
               </label>
               <label>
-                <span>Task color</span>
-                <div className="task-color-control">
-                  <input
-                    aria-label="Custom task color"
-                    type="color"
-                    value={draft.color || priorityColors[draft.priority]}
-                    onChange={(event) => setDraft((current) => ({ ...current, color: event.target.value }))}
-                  />
-                  <span>{draft.color ? 'Custom color' : `Priority color (${draft.priority})`}</span>
-                  {draft.color ? (
-                    <button type="button" className="ghost-button" onClick={() => setDraft((current) => ({ ...current, color: '' }))}>
-                      Use priority
-                    </button>
-                  ) : null}
-                </div>
+                <span>Label / subject</span>
+                <input value={draft.label} onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))} placeholder="e.g. University, Work, Personal" />
               </label>
               <label>
                 <span>Status</span>
@@ -800,22 +749,6 @@ function App() {
                   <option value="archived">Archived</option>
                 </select>
               </label>
-              <label className="full-width">
-                <span>Labels</span>
-                <input value={draft.labels} onChange={(event) => setDraft((current) => ({ ...current, labels: event.target.value }))} placeholder="work, university, focus" />
-              </label>
-              <div className="full-width checklist-box">
-                <span>Checklist</span>
-                {draft.checklist.length ? (
-                  draft.checklist.map((item) => (
-                    <div key={item.id} className="checklist-item">
-                      <input type="checkbox" checked={item.checked} onChange={() => setDraft((current) => ({ ...current, checklist: current.checklist.map((entry) => entry.id === item.id ? { ...entry, checked: !entry.checked } : entry) }))} />
-                      <input value={item.text} onChange={(event) => setDraft((current) => ({ ...current, checklist: current.checklist.map((entry) => entry.id === item.id ? { ...entry, text: event.target.value } : entry) }))} />
-                    </div>
-                  ))
-                ) : <p className="empty-state">No checklist items yet.</p>}
-                <button type="button" className="ghost-button" onClick={() => setDraft((current) => ({ ...current, checklist: [...current.checklist, { id: `check-${Date.now()}`, text: '', checked: false }] }))}>Add item</button>
-              </div>
             </div>
 
             <div className="modal__footer">

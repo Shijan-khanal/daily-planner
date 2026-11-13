@@ -14,19 +14,10 @@ export type Task = {
   priority: Priority;
   color?: string;
   status: TaskStatus;
-  listId: string;
   labels: string[];
   checklist: { id: string; text: string; checked: boolean }[];
   createdAt: string;
   updatedAt: string;
-};
-
-export type ListItem = {
-  id: string;
-  name: string;
-  color: string;
-  icon: string;
-  description: string;
 };
 
 export type AppSettings = {
@@ -39,8 +30,7 @@ export type AppSettings = {
 
 export type AppData = {
   tasks: Task[];
-  lists: ListItem[];
   settings: AppSettings;
 };
 
-export type NavKey = 'inbox' | 'today' | 'upcoming' | 'calendar' | 'tasks' | 'lists' | 'productivity' | 'settings';
+export type NavKey = 'inbox' | 'today' | 'upcoming' | 'calendar' | 'tasks' | 'productivity' | 'settings';
