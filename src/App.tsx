@@ -81,7 +81,6 @@ function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropTargetDate, setDropTargetDate] = useState<string | null>(null);
-  const [openTaskMenuId, setOpenTaskMenuId] = useState<string | null>(null);
 
   useEffect(() => {
     void loadAppData().then((loadedData) => {
@@ -96,21 +95,6 @@ function App() {
     }
     void saveAppData(appData);
   }, [appData, loaded]);
-
-  useEffect(() => {
-    if (!openTaskMenuId) {
-      return;
-    }
-
-    const closeMenuOnOutsideClick = (event: PointerEvent) => {
-      if (!(event.target instanceof Element) || !event.target.closest('.task-menu')) {
-        setOpenTaskMenuId(null);
-      }
-    };
-
-    document.addEventListener('pointerdown', closeMenuOnOutsideClick);
-    return () => document.removeEventListener('pointerdown', closeMenuOnOutsideClick);
-  }, [openTaskMenuId]);
 
   useEffect(() => {
     const theme = appData.settings.theme === 'system'
@@ -283,7 +267,6 @@ function App() {
       ...current,
       tasks: current.tasks.filter((task) => task.id !== taskId),
     }));
-    setOpenTaskMenuId(null);
   };
 
   const deleteEditingTask = () => {
@@ -387,31 +370,15 @@ function App() {
             ) : null}
           </div>
         </div>
-        <div className="task-menu">
+        <div className="task-card__edit-action">
           <button
             type="button"
-            className="task-menu__trigger"
-            aria-label={`More options for ${task.title}`}
-            aria-haspopup="menu"
-            aria-expanded={openTaskMenuId === task.id}
-            onClick={() => setOpenTaskMenuId((current) => current === task.id ? null : task.id)}
+            className="task-card__edit-button"
+            aria-label={`Edit task: ${task.title}`}
+            onClick={() => openTaskEditor(task)}
           >
             <MoreHorizontal size={17} />
           </button>
-          {openTaskMenuId === task.id ? (
-            <div className="task-menu__popover" role="menu">
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setOpenTaskMenuId(null);
-                  openTaskEditor(task);
-                }}
-              >
-                Edit task
-              </button>
-            </div>
-          ) : null}
         </div>
       </div>
     );

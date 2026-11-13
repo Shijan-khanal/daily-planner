@@ -455,14 +455,14 @@ h1, h2, h3, h4, p {
   flex-wrap: wrap;
 }
 
-.task-menu {
+.task-card__edit-action {
   position: absolute;
   top: 0.45rem;
   right: 0.45rem;
   z-index: 2;
 }
 
-.task-menu__trigger {
+.task-card__edit-button {
   width: 30px;
   height: 30px;
   display: grid;
@@ -473,37 +473,10 @@ h1, h2, h3, h4, p {
   color: var(--text-soft);
 }
 
-.task-menu__trigger:hover,
-.task-menu__trigger[aria-expanded='true'] {
+.task-card__edit-button:hover {
   border-color: var(--border);
   background: var(--panel-strong);
   color: var(--text);
-}
-
-.task-menu__popover {
-  position: absolute;
-  top: calc(100% + 0.3rem);
-  right: 0;
-  min-width: 140px;
-  padding: 0.3rem;
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  background: var(--panel);
-  box-shadow: var(--shadow);
-}
-
-.task-menu__popover button {
-  width: 100%;
-  padding: 0.55rem 0.65rem;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text);
-  text-align: left;
-}
-
-.task-menu__popover button:hover {
-  background: var(--panel-strong);
 }
 
 .dashboard-grid, .stats-grid, .settings-grid, .list-grid {
