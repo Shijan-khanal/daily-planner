@@ -1,0 +1,22 @@
+# Planner
+
+A personal task planner built with React, TypeScript, and Vite. Tasks and settings are stored locally in the browser using IndexedDB.
+
+## Run locally
+
+```sh
+npm install
+npm run dev
+```
+
+Create a production build with `npm run build`.
+
+## Deploy to GitHub Pages
+
+The workflow in `.github/workflows/deploy-pages.yml` builds and deploys the site whenever changes are pushed to `main`.
+
+In the repository, open **Settings → Pages** and set the publishing source to **GitHub Actions**. After the first successful workflow run, open the Pages URL shown in the deployment workflow.
+
+## Data and backups
+
+Planner data is stored in IndexedDB for the current browser and site origin. It is not uploaded to GitHub or synchronized between browsers. A new Pages URL has a separate browser database from `localhost`. Use **Settings → Export** to save a JSON backup, and **Settings → Import** on the Pages site to restore it.
