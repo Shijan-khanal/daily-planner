@@ -535,6 +535,27 @@ h1, h2, h3, h4, p {
   margin-top: 0.75rem;
 }
 
+.week-column .task-card {
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.7rem;
+  padding: 0.75rem;
+}
+
+.week-column .task-card__main {
+  min-width: 0;
+}
+
+.week-column .task-card__actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.week-column .task-card__actions .ghost-button {
+  padding: 0.45rem 0.65rem;
+}
+
 .empty-day {
   width: 100%;
   margin-top: 0.7rem;
