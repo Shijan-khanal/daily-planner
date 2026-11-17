@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, agents/project-personal-school-planner-1-project-overvi]
   workflow_dispatch:
 
 permissions:
