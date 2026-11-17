@@ -7,8 +7,6 @@ import {
   endOfWeek,
   format,
   isToday,
-  isTomorrow,
-  isYesterday,
   startOfMonth,
   startOfWeek,
 } from 'date-fns';
@@ -16,23 +14,20 @@ import {
   Bell,
   CalendarDays,
   Check,
-  CheckCheck,
   ChevronLeft,
   ChevronRight,
   Download,
-  Inbox,
   ListTodo,
   MoreHorizontal,
   Moon,
   Plus,
   Search,
   Settings,
-  Sparkles,
   SunMedium,
   Upload,
   X,
 } from 'lucide-react';
-import type { AppData, AppSettings, NavKey, Priority, Task, TaskStatus, ThemeMode } from './types';
+import type { AppData, AppSettings, NavKey, Priority, Subject, Task, TaskStatus, ThemeMode } from './types';
 import { defaultAppData, loadAppData, normalizeTask, saveAppData } from './storage';
 
 type DraftTask = {
@@ -40,22 +35,20 @@ type DraftTask = {
   priority: Priority;
   status: TaskStatus;
   label: string;
+  description: string;
 };
 
-const navItems: { key: NavKey; label: string; icon: typeof Inbox }[] = [
-  { key: 'inbox', label: 'Inbox', icon: Inbox },
+const navItems: { key: NavKey; label: string; icon: typeof CalendarDays }[] = [
   { key: 'today', label: 'Today', icon: CalendarDays },
   { key: 'upcoming', label: 'Upcoming', icon: ListTodo },
   { key: 'calendar', label: 'Calendar', icon: CalendarDays },
-  { key: 'tasks', label: 'Tasks', icon: CheckCheck },
-  { key: 'productivity', label: 'Productivity', icon: Sparkles },
   { key: 'settings', label: 'Settings', icon: Settings },
 ];
 
 const priorityColors: Record<Priority, string> = {
-  low: '#10b981',
+  low: '#8791a3',
   medium: '#f59e0b',
-  high: '#f97316',
+  high: '#e35d6a',
   urgent: '#ef4444',
 };
 
@@ -63,7 +56,8 @@ const defaultDraft = (): DraftTask => ({
   title: '',
   priority: 'medium',
   status: 'not-started',
-  label: '',
+  label: 'Other',
+  description: '',
 });
 
 function App() {
@@ -71,9 +65,9 @@ function App() {
   const [selectedView, setSelectedView] = useState<NavKey>('calendar');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [search, setSearch] = useState('');
-  const [quickTitle, setQuickTitle] = useState('');
   const [taskEditorOpen, setTaskEditorOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftTask>(defaultDraft());
   const [draftScheduledDate, setDraftScheduledDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [loaded, setLoaded] = useState(false);
@@ -81,20 +75,27 @@ function App() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropTargetDate, setDropTargetDate] = useState<string | null>(null);
+  const [persistenceError, setPersistenceError] = useState('');
 
   useEffect(() => {
     void loadAppData().then((loadedData) => {
       setAppData(loadedData);
+      setCalendarView(loadedData.settings.defaultCalendarView);
+      setLoaded(true);
+    }).catch((error: unknown) => {
+      setPersistenceError(error instanceof Error ? error.message : 'Could not load planner data.');
       setLoaded(true);
     });
   }, []);
 
   useEffect(() => {
-    if (!loaded) {
+    if (!loaded || persistenceError) {
       return;
     }
-    void saveAppData(appData);
-  }, [appData, loaded]);
+    void saveAppData(appData).then(() => setPersistenceError('')).catch((error: unknown) => {
+      setPersistenceError(error instanceof Error ? error.message : 'Could not save planner data.');
+    });
+  }, [appData, loaded, persistenceError]);
 
   useEffect(() => {
     const theme = appData.settings.theme === 'system'
@@ -113,12 +114,15 @@ function App() {
       }
       if (event.key.toLowerCase() === 'n' && !['INPUT', 'TEXTAREA'].includes(activeTag ?? '')) {
         event.preventDefault();
-        openTaskEditor();
+        setEditingTaskId(null);
+        setDraft(defaultDraft());
+        setDraftScheduledDate(format(selectedDate, 'yyyy-MM-dd'));
+        setTaskEditorOpen(true);
       }
     };
     window.addEventListener('keydown', onKeydown);
     return () => window.removeEventListener('keydown', onKeydown);
-  }, []);
+  }, [selectedDate]);
 
   const tasksByStatus = useMemo(() => {
     const safe = appData.tasks.filter((task) => task.status !== 'archived');
@@ -126,7 +130,6 @@ function App() {
       total: safe.length,
       complete: safe.filter((task) => task.status === 'completed').length,
       active: safe.filter((task) => task.status !== 'completed').length,
-      overdue: safe.filter((task) => task.dueDate && task.dueDate < format(new Date(), 'yyyy-MM-dd') && task.status !== 'completed').length,
     };
   }, [appData.tasks]);
 
@@ -151,7 +154,8 @@ function App() {
         title: task.title,
         priority: task.priority,
         status: task.status,
-        label: task.labels.join(', '),
+        label: task.labels[0] ?? 'Other',
+        description: task.description,
       });
     } else {
       setEditingTaskId(null);
@@ -178,18 +182,18 @@ function App() {
       : undefined;
     const taskPayload: Task = {
       ...existingTask,
-      id: existingTask?.id ?? `task-${Date.now()}`,
+      id: existingTask?.id ?? crypto.randomUUID(),
       title: trimmedTitle,
       priority: draft.priority,
       status: draft.status,
-      labels: draft.label.trim() ? [draft.label.trim()] : [],
-      scheduledDate: existingTask?.scheduledDate ?? draftScheduledDate,
-      description: existingTask?.description ?? '',
+      labels: draft.label ? [draft.label] : [],
+      scheduledDate: draftScheduledDate,
+      description: draft.description.trim(),
       notes: existingTask?.notes ?? '',
       dueDate: existingTask?.dueDate ?? null,
       startTime: existingTask?.startTime ?? null,
       endTime: existingTask?.endTime ?? null,
-      color: existingTask?.color,
+      color: appData.settings.subjects.find((subject) => subject.name === draft.label)?.color ?? existingTask?.color,
       checklist: existingTask?.checklist ?? [],
       createdAt: existingTask?.createdAt ?? iso,
       updatedAt: iso,
@@ -209,19 +213,6 @@ function App() {
     });
 
     closeTaskEditor();
-  };
-
-  const addQuickTask = () => {
-    const title = quickTitle.trim();
-    if (!title) {
-      return;
-    }
-
-    setEditingTaskId(null);
-    setDraft({ ...defaultDraft(), title });
-    setDraftScheduledDate(format(selectedDate, 'yyyy-MM-dd'));
-    setQuickTitle('');
-    setTaskEditorOpen(true);
   };
 
   const toggleTaskComplete = (taskId: string) => {
@@ -284,6 +275,59 @@ function App() {
     }));
   };
 
+  const updateSubject = (index: number, changes: Partial<Subject>) => {
+    setAppData((current) => {
+      const previous = current.settings.subjects[index];
+      if (!previous) {
+        return current;
+      }
+      const updatedSubject = { ...previous, ...changes };
+      return {
+        ...current,
+        settings: {
+          ...current.settings,
+          subjects: current.settings.subjects.map((subject, subjectIndex) => subjectIndex === index ? updatedSubject : subject),
+        },
+        tasks: current.tasks.map((task) => task.labels[0] === previous.name
+          ? {
+            ...task,
+            labels: [updatedSubject.name, ...task.labels.slice(1)],
+            color: updatedSubject.color,
+            updatedAt: new Date().toISOString(),
+          }
+          : task),
+      };
+    });
+  };
+
+  const addSubject = () => {
+    const name = `Subject ${appData.settings.subjects.length + 1}`;
+    setAppData((current) => ({
+      ...current,
+      settings: {
+        ...current.settings,
+        subjects: [...current.settings.subjects, { name, color: '#8791a3' }],
+      },
+    }));
+  };
+
+  const removeSubject = (index: number) => {
+    const subject = appData.settings.subjects[index];
+    if (!subject || subject.name === 'Other') {
+      return;
+    }
+    setAppData((current) => ({
+      ...current,
+      settings: {
+        ...current.settings,
+        subjects: current.settings.subjects.filter((_, subjectIndex) => subjectIndex !== index),
+      },
+      tasks: current.tasks.map((task) => task.labels[0] === subject.name
+        ? { ...task, labels: ['Other', ...task.labels.slice(1)], color: current.settings.subjects.find((item) => item.name === 'Other')?.color, updatedAt: new Date().toISOString() }
+        : task),
+    }));
+  };
+
   const exportBackup = () => {
     const serialized = JSON.stringify(appData, null, 2);
     const blob = new Blob([serialized], { type: 'application/json' });
@@ -301,18 +345,23 @@ function App() {
       return;
     }
 
-    const text = await file.text();
-    const parsed = JSON.parse(text) as Partial<AppData>;
-    const nextData: AppData = {
-      tasks: parsed.tasks?.map(normalizeTask) ?? [],
-      settings: {
-        ...defaultAppData().settings,
-        ...(parsed.settings ?? {}),
-      },
-    };
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as Partial<AppData>;
+      const nextData: AppData = {
+        tasks: parsed.tasks?.map(normalizeTask) ?? [],
+        settings: {
+          ...defaultAppData().settings,
+          ...(parsed.settings ?? {}),
+        },
+      };
 
-    setAppData(nextData);
-    event.target.value = '';
+      setAppData(nextData);
+      setPersistenceError('');
+      event.target.value = '';
+    } catch (error) {
+      setPersistenceError(error instanceof Error ? `Could not import planner data: ${error.message}` : 'Could not import planner data.');
+    }
   };
 
   const weekDays = useMemo(() => {
@@ -331,10 +380,14 @@ function App() {
       end: endOfWeek(monthEnd, { weekStartsOn: appData.settings.firstDayOfWeek === 'monday' ? 1 : 0 }),
     });
   }, [selectedDate, appData.settings.firstDayOfWeek]);
+  const monthWeekdays = appData.settings.firstDayOfWeek === 'monday'
+    ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   const renderTaskCard = (task: Task, draggable = false) => {
     const isDone = task.status === 'completed';
-    const taskColor = task.color || priorityColors[task.priority];
+    const subjectName = task.labels[0] || 'Other';
+    const taskColor = appData.settings.subjects.find((subject) => subject.name === subjectName)?.color ?? task.color ?? '#8791a3';
 
     return (
       <div
@@ -351,9 +404,10 @@ function App() {
           </button>
           <div className="task-card__content">
             <div className="task-card__title-row">
-              <span className="task-title">{task.title}</span>
-              <span className="priority-pill" style={{ backgroundColor: `${taskColor}20`, color: taskColor }}>
-                {task.priority}
+              <button type="button" className="task-title task-title--button" onClick={() => setDetailTaskId(task.id)}>{task.title}</button>
+              <span className="priority-pill" style={{ backgroundColor: `${priorityColors[task.priority]}20`, color: priorityColors[task.priority] }}>
+                <span className="priority-dot" style={{ backgroundColor: priorityColors[task.priority] }} />
+                {task.priority === 'urgent' ? 'high' : task.priority}
               </span>
             </div>
             {task.description ? <p className="task-description">{task.description}</p> : null}
@@ -364,7 +418,16 @@ function App() {
             {task.labels.length ? (
               <div className="label-row">
                 {task.labels.map((label) => (
-                  <span className="label-pill" key={`${task.id}-${label}`}>{label}</span>
+                  <span
+                    className="label-pill"
+                    key={`${task.id}-${label}`}
+                    style={{
+                      backgroundColor: `${appData.settings.subjects.find((subject) => subject.name === label)?.color ?? task.color ?? '#8791a3'}20`,
+                      color: appData.settings.subjects.find((subject) => subject.name === label)?.color ?? task.color ?? '#8791a3',
+                    }}
+                  >
+                    {label}
+                  </span>
                 ))}
               </div>
             ) : null}
@@ -388,7 +451,7 @@ function App() {
     if (calendarView === 'month') {
       return (
         <div className="month-grid">
-          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((dayName) => (
+          {monthWeekdays.map((dayName) => (
             <div key={dayName} className="month-grid__header">{dayName}</div>
           ))}
           {monthGrid.map((date) => {
@@ -398,7 +461,7 @@ function App() {
               <button
                 type="button"
                 key={dateKey}
-                className={`month-cell ${isToday(date) ? 'month-cell--today' : ''} ${dropTargetDate === dateKey ? 'month-cell--drop-target' : ''}`}
+                className={`month-cell ${isToday(date) ? 'month-cell--today' : ''} ${dateKey === format(selectedDate, 'yyyy-MM-dd') ? 'month-cell--selected' : ''} ${dropTargetDate === dateKey ? 'month-cell--drop-target' : ''}`}
                 onClick={() => setSelectedDate(date)}
                 onDragOver={(event) => {
                   event.preventDefault();
@@ -410,18 +473,19 @@ function App() {
               >
                 <span className="month-cell__day">{format(date, 'd')}</span>
                 <div className="month-cell__items">
-                  {dayTasks.map((task) => (
+                  {dayTasks.slice(0, 5).map((task) => (
                     <span
                       key={task.id}
                       className="mini-tag mini-tag--draggable"
-                      style={{ background: `${task.color || priorityColors[task.priority]}22`, color: task.color || priorityColors[task.priority] }}
+                      aria-label={`${task.title}, ${task.labels[0] || 'Other'}`}
                       draggable
                       onDragStart={(event) => handleTaskDragStart(event, task.id)}
                       onDragEnd={() => { setDraggedTaskId(null); setDropTargetDate(null); }}
                     >
-                      {task.title}
+                      <span className="month-cell__dot" style={{ backgroundColor: appData.settings.subjects.find((subject) => subject.name === (task.labels[0] || 'Other'))?.color ?? task.color ?? '#8791a3' }} />
                     </span>
                   ))}
+                  {dayTasks.length > 5 ? <span className="month-cell__overflow">+{dayTasks.length - 5}</span> : null}
                 </div>
               </button>
             );
@@ -432,7 +496,7 @@ function App() {
 
     return (
       <div className="week-grid">
-        {weekDays.map((day) => {
+        {weekDays.map((day, index) => {
           const dateKey = format(day, 'yyyy-MM-dd');
           const dayTasks = visibleTasks.filter((task) => task.scheduledDate === dateKey && task.status !== 'archived');
 
@@ -454,10 +518,7 @@ function App() {
                   <strong>{format(day, 'd')}</strong>
                 </div>
                 <small className="week-column__relative">
-                  {isYesterday(day) ? 'Yesterday' :
-                    isToday(day) ? 'Today' :
-                      isTomorrow(day) ? 'Tomorrow' :
-                        format(day, 'yyyy-MM-dd') === format(addDays(new Date(), 2), 'yyyy-MM-dd') ? 'In 2 days' : format(day, 'EEEE')}
+                  {['Yesterday', 'Today', 'Tomorrow', 'In 2 days'][index]}
                 </small>
               </div>
               {dayTasks.length ? (
@@ -477,10 +538,10 @@ function App() {
     <div className={`app-shell ${taskEditorOpen ? 'app-shell--editor-open' : ''}`}>
       <aside className="sidebar">
         <div className="brand-block">
-          <div className="brand-mark">P</div>
+          <div className="brand-mark">M</div>
           <div>
-            <h1>Planner</h1>
-            <small>Personal flow</small>
+            <h1>My School Planner</h1>
+            <small>Your schoolwork, in flow</small>
           </div>
         </div>
 
@@ -548,59 +609,33 @@ function App() {
         <section className="page-header">
           <div>
             <h2>
-              {selectedView === 'inbox' && 'Inbox'}
               {selectedView === 'today' && 'Today'}
               {selectedView === 'upcoming' && 'Upcoming'}
               {selectedView === 'calendar' && 'Calendar'}
-              {selectedView === 'tasks' && 'Tasks'}
-              {selectedView === 'productivity' && 'Productivity'}
               {selectedView === 'settings' && 'Settings'}
             </h2>
             <p>
-              {selectedView === 'inbox' && 'Capture everything that needs attention without slowing down.'}
               {selectedView === 'today' && `Focus on ${format(new Date(), 'EEEE, MMM d')}.`}
               {selectedView === 'upcoming' && 'Plan ahead and keep the week in motion.'}
-              {selectedView === 'calendar' && 'Drag tasks between days to plan your week.'}
-              {selectedView === 'tasks' && 'Everything in one complete list.'}
-              {selectedView === 'productivity' && 'Track momentum, progress, and completion.'}
+              {selectedView === 'calendar' && 'Plan today and the next few days. Drag tasks to reschedule.'}
               {selectedView === 'settings' && 'Adjust the planner to match your rhythm.'}
             </p>
           </div>
           {selectedView === 'calendar' ? (
             <div className="date-controls">
-              <button type="button" className="nav-button" aria-label="Previous day" onClick={() => setSelectedDate((value) => calendarView === 'month' ? addMonths(value, -1) : addDays(value, -1))}><ChevronLeft size={16} /></button>
+              <button type="button" className="nav-button" aria-label={calendarView === 'month' ? 'Previous month' : 'Previous day'} onClick={() => setSelectedDate((value) => calendarView === 'month' ? addMonths(value, -1) : addDays(value, -1))}><ChevronLeft size={16} /></button>
               <button type="button" className="ghost-button" onClick={() => setSelectedDate(new Date())}>Today</button>
-              <span className="date-controls__selected">{format(selectedDate, 'EEE, MMM d')}</span>
-              <button type="button" className="nav-button" aria-label="Next day" onClick={() => setSelectedDate((value) => calendarView === 'month' ? addMonths(value, 1) : addDays(value, 1))}><ChevronRight size={16} /></button>
+              <span className="date-controls__selected">{calendarView === 'month' ? format(selectedDate, 'MMMM yyyy') : `${format(weekDays[0], 'MMM d')} – ${format(weekDays[3], 'MMM d, yyyy')}`}</span>
+              <button type="button" className="nav-button" aria-label={calendarView === 'month' ? 'Next month' : 'Next day'} onClick={() => setSelectedDate((value) => calendarView === 'month' ? addMonths(value, 1) : addDays(value, 1))}><ChevronRight size={16} /></button>
               <div className="segmented-control">
-                <button type="button" className={calendarView === 'week' ? 'active' : ''} onClick={() => setCalendarView('week')}>Days</button>
+                <button type="button" className={calendarView === 'week' ? 'active' : ''} onClick={() => setCalendarView('week')}>4 days</button>
                 <button type="button" className={calendarView === 'month' ? 'active' : ''} onClick={() => setCalendarView('month')}>Month</button>
               </div>
             </div>
           ) : null}
         </section>
 
-        {selectedView === 'inbox' ? (
-          <div className="panel panel--padded">
-            <div className="quick-add">
-              <input
-                type="text"
-                value={quickTitle}
-                onChange={(event) => setQuickTitle(event.target.value)}
-                placeholder="Capture a quick task..."
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    addQuickTask();
-                  }
-                }}
-              />
-              <button type="button" className="primary-button" onClick={addQuickTask}>Add</button>
-            </div>
-            <div className="task-list">
-              {visibleTasks.filter((task) => task.status !== 'completed' && task.status !== 'archived').slice(0, 8).map((task) => renderTaskCard(task))}
-            </div>
-          </div>
-        ) : null}
+        {persistenceError ? <p className="storage-message" role="alert">{persistenceError} Your changes may not be saved.</p> : null}
 
         {selectedView === 'today' ? (
           <div className="dashboard-grid">
@@ -644,47 +679,30 @@ function App() {
         ) : null}
 
         {selectedView === 'calendar' ? (
+          <>
+            <div className="calendar-summary" aria-label="Task overview">
+              <span><strong>{tasksByStatus.complete}</strong> completed</span>
+              <span><strong>{tasksByStatus.active}</strong> remaining</span>
+            </div>
           <div className="panel panel--padded">
             {renderCalendarLayout()}
+            {calendarView === 'month' ? (
+              <section className="selected-day">
+                <div className="selected-day__header">
+                  <div>
+                    <h3>{format(selectedDate, 'EEEE, MMMM d')}</h3>
+                    <p>{appData.tasks.filter((task) => task.scheduledDate === format(selectedDate, 'yyyy-MM-dd') && task.status !== 'archived').length} tasks scheduled</p>
+                  </div>
+                  <button type="button" className="ghost-button" onClick={() => openTaskEditor(undefined, selectedDate)}><Plus size={15} /> Add task</button>
+                </div>
+                <div className="task-list compact-list">
+                  {visibleTasks.filter((task) => task.scheduledDate === format(selectedDate, 'yyyy-MM-dd') && task.status !== 'archived').map((task) => renderTaskCard(task))}
+                  {!visibleTasks.some((task) => task.scheduledDate === format(selectedDate, 'yyyy-MM-dd') && task.status !== 'archived') ? <p className="empty-state">No tasks scheduled for this day yet.</p> : null}
+                </div>
+              </section>
+            ) : null}
           </div>
-        ) : null}
-
-        {selectedView === 'tasks' ? (
-          <div className="panel panel--padded">
-            <div className="task-list">
-              {visibleTasks.map((task) => renderTaskCard(task))}
-            </div>
-          </div>
-        ) : null}
-
-        {selectedView === 'productivity' ? (
-          <div className="stats-grid">
-            <div className="panel panel--padded">
-              <small>Total tasks</small>
-              <h3>{tasksByStatus.total}</h3>
-            </div>
-            <div className="panel panel--padded">
-              <small>Completed</small>
-              <h3>{tasksByStatus.complete}</h3>
-            </div>
-            <div className="panel panel--padded">
-              <small>Overdue</small>
-              <h3>{tasksByStatus.overdue}</h3>
-            </div>
-            <div className="panel panel--padded">
-              <small>Open</small>
-              <h3>{tasksByStatus.active}</h3>
-            </div>
-            <div className="panel panel--padded stats-panel__wide">
-              <h3>Completion trend</h3>
-              <div className="bars">
-                {Array.from({ length: 6 }).map((_, index) => {
-                  const height = 25 + ((index * 11) % 55);
-                  return <span key={index} style={{ height: `${height}%` }} />;
-                })}
-              </div>
-            </div>
-          </div>
+          </>
         ) : null}
 
         {selectedView === 'settings' ? (
@@ -713,13 +731,41 @@ function App() {
               <div className="settings-row">
                 <label>Default calendar view</label>
                 <select value={appData.settings.defaultCalendarView} onChange={(event) => updateSetting('defaultCalendarView', event.target.value as AppSettings['defaultCalendarView'])}>
-                  <option value="week">Week</option>
+                  <option value="week">4 days</option>
                   <option value="month">Month</option>
                 </select>
               </div>
               <div className="settings-row">
                 <label>Default task duration (min)</label>
                 <input type="number" value={appData.settings.defaultTaskDuration} onChange={(event) => updateSetting('defaultTaskDuration', Number(event.target.value))} />
+              </div>
+            </div>
+
+            <div className="panel panel--padded subjects-panel">
+              <div className="subjects-panel__header">
+                <div>
+                  <h3>Subjects</h3>
+                  <p className="empty-state">Choose a color and name for each school subject.</p>
+                </div>
+                <button type="button" className="ghost-button" onClick={addSubject}><Plus size={15} /> Add subject</button>
+              </div>
+              <div className="subject-settings-list">
+                {appData.settings.subjects.map((subject, index) => (
+                  <div className="subject-settings-row" key={index}>
+                    <input
+                      aria-label="Subject name"
+                      value={subject.name}
+                      onChange={(event) => updateSubject(index, { name: event.target.value })}
+                    />
+                    <input
+                      aria-label={`${subject.name} color`}
+                      type="color"
+                      value={subject.color}
+                      onChange={(event) => updateSubject(index, { color: event.target.value })}
+                    />
+                    {subject.name !== 'Other' ? <button type="button" className="icon-button" aria-label={`Remove ${subject.name}`} onClick={() => removeSubject(index)}><X size={14} /></button> : <span />}
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -751,8 +797,8 @@ function App() {
             </div>
             <div className="form-grid">
               <label className="full-width">
-                <span>Title</span>
-                <input value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} />
+                <span>Task name</span>
+                <input autoFocus required value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} placeholder="e.g. Finish mathematics exercises" />
               </label>
               <label>
                 <span>Priority</span>
@@ -760,12 +806,19 @@ function App() {
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
                   <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
+                  {draft.priority === 'urgent' ? <option value="urgent">Urgent (legacy)</option> : null}
                 </select>
               </label>
               <label>
-                <span>Label / subject</span>
-                <input value={draft.label} onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))} placeholder="e.g. University, Work, Personal" />
+                <span>Subject</span>
+                <select value={draft.label} onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))}>
+                  {draft.label && !appData.settings.subjects.some((subject) => subject.name === draft.label) ? <option value={draft.label}>{draft.label}</option> : null}
+                  {appData.settings.subjects.map((subject) => <option key={subject.name} value={subject.name}>{subject.name}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Date</span>
+                <input type="date" required value={draftScheduledDate} onChange={(event) => setDraftScheduledDate(event.target.value)} />
               </label>
               <label>
                 <span>Status</span>
@@ -776,6 +829,10 @@ function App() {
                   <option value="archived">Archived</option>
                 </select>
               </label>
+              <label className="full-width">
+                <span>Description / notes</span>
+                <textarea value={draft.description} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} placeholder="Add any useful details..." />
+              </label>
             </div>
 
             <div className="modal__footer">
@@ -784,12 +841,62 @@ function App() {
               ) : <span />}
               <div className="modal__footer-actions">
                 <button type="button" className="ghost-button" onClick={closeTaskEditor}>Cancel</button>
-                <button type="button" className="primary-button" onClick={saveTask}>Save task</button>
+                <button type="button" className="primary-button" onClick={saveTask} disabled={!draft.title.trim() || !draftScheduledDate}>Save task</button>
               </div>
             </div>
           </div>
         </div>
       ) : null}
+
+      {detailTaskId ? (() => {
+        const task = appData.tasks.find((item) => item.id === detailTaskId);
+        if (!task) {
+          return null;
+        }
+        const subjectName = task.labels[0] || 'Other';
+        const subjectColor = appData.settings.subjects.find((subject) => subject.name === subjectName)?.color ?? task.color ?? '#8791a3';
+        return (
+          <div className="modal-backdrop" onClick={() => setDetailTaskId(null)}>
+            <section className="modal task-details" aria-label="Task details" onClick={(event) => event.stopPropagation()}>
+              <div className="modal__header">
+                <h3>Task details</h3>
+                <button type="button" className="icon-button" aria-label="Close task details" onClick={() => setDetailTaskId(null)}><X size={16} /></button>
+              </div>
+              <h2>{task.title}</h2>
+              <div className="task-details__meta">
+                <span className="label-pill" style={{ backgroundColor: `${subjectColor}20`, color: subjectColor }}>{subjectName}</span>
+                <span className="priority-pill" style={{ backgroundColor: `${priorityColors[task.priority]}20`, color: priorityColors[task.priority] }}>
+                  <span className="priority-dot" style={{ backgroundColor: priorityColors[task.priority] }} />
+                  {task.priority === 'urgent' ? 'high' : task.priority}
+                </span>
+                <span className="meta-badge">{task.scheduledDate ? format(new Date(`${task.scheduledDate}T12:00:00`), 'EEEE, MMMM d, yyyy') : 'No date'}</span>
+                <span className="meta-badge">{task.status === 'completed' ? 'Completed' : task.status === 'in-progress' ? 'In progress' : 'Not completed'}</span>
+              </div>
+              <p className="task-details__description">{task.description || 'No description added.'}</p>
+              <div className="modal__footer">
+                <button
+                  type="button"
+                  className="ghost-button ghost-button--danger"
+                  onClick={() => {
+                    if (window.confirm('Delete this task? This cannot be undone.')) {
+                      deleteTask(task.id);
+                      setDetailTaskId(null);
+                    }
+                  }}
+                >
+                  Delete task
+                </button>
+                <div className="modal__footer-actions">
+                  <button type="button" className="ghost-button" onClick={() => toggleTaskComplete(task.id)}>
+                    {task.status === 'completed' ? 'Mark unfinished' : 'Mark completed'}
+                  </button>
+                  <button type="button" className="primary-button" onClick={() => { setDetailTaskId(null); openTaskEditor(task); }}>Edit task</button>
+                </div>
+              </div>
+            </section>
+          </div>
+        );
+      })() : null}
     </div>
   );
 }

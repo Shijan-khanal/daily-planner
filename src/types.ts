@@ -26,6 +26,12 @@ export type AppSettings = {
   firstDayOfWeek: 'monday' | 'sunday';
   timeFormat: '12h' | '24h';
   defaultTaskDuration: number;
+  subjects: Subject[];
+};
+
+export type Subject = {
+  name: string;
+  color: string;
 };
 
 export type AppData = {
@@ -33,4 +39,4 @@ export type AppData = {
   settings: AppSettings;
 };
 
-export type NavKey = 'inbox' | 'today' | 'upcoming' | 'calendar' | 'tasks' | 'productivity' | 'settings';
+export type NavKey = 'today' | 'upcoming' | 'calendar' | 'settings';

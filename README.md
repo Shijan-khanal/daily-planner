@@ -1,8 +1,8 @@
-# Planner
+# My School Planner
 
 A personal task planner built with React, TypeScript, and Vite. Tasks and settings are stored locally in the browser using IndexedDB.
 
-The calendar is the home view. Its Days view shows yesterday, today, tomorrow, and the following day; use the arrows to move the window one day at a time. Tasks use a title, priority, subject label, and status; drag them between days in the Days or Month view to reschedule. Use the three-dot task menu to edit a task or open its editor to delete it.
+The calendar is the home view, with a four-day view (yesterday through the day after tomorrow) and a minimal monthly view. Use the arrows to move one day at a time or navigate between months, and select **Today** to return to the current date. Add and edit tasks with a subject, priority, scheduled date, and optional description. Drag tasks between dates, or select a task to view its details and manage completion. Subject names and colors can be customized in Settings.
 
 When GitHub Pages is enabled, the site is available at <https://shijan-khanal.github.io/daily-planner/>.
 
